@@ -14,7 +14,7 @@ class OpenWeatherMap(OMPluginBase):
     """
 
     name = 'OpenWeatherMap'
-    version = '0.1.10'
+    version = '0.1.11'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'api_key',
@@ -106,7 +106,10 @@ class OpenWeatherMap(OMPluginBase):
                                 if selected_entry is None:
                                     self.logger('Could not find forecast for virtual sensor {0}'.format(sensor_id))
                                     continue
-                                sensor_values[sensor_id] = [selected_entry['main']['temp'], selected_entry['main']['humidity'], None]
+                                rain = 0
+                                if 'rain' in selected_entry:
+                                    rain = selected_entry['rain'][0]
+                                sensor_values[sensor_id] = [selected_entry['main']['temp'], selected_entry['main']['humidity'], rain]
                     except Exception as ex:
                         self.logger('Error while fetching forecast temperatures: {0}'.format(ex))
                 if len(self._current_mapping) > 0:
@@ -122,7 +125,10 @@ class OpenWeatherMap(OMPluginBase):
                             result = response.json()
                             for sensor in self._current_mapping:
                                 sensor_id = sensor['sensor_id']
-                                sensor_values[sensor_id] = [result['main']['temp'], result['main']['humidity'], None]
+                                rain = 0
+                                if 'rain' in result:
+                                    rain = result['rain'][0]
+                                sensor_values[sensor_id] = [result['main']['temp'], result['main']['humidity'], rain]
                     except Exception as ex:
                         self.logger('Error while fetching current temperatures: {0}'.format(ex))
                 if 0 <= self._uv_sensor_id <= 31:
@@ -157,9 +163,10 @@ class OpenWeatherMap(OMPluginBase):
                 try:
                     for sensor_id, values in sensor_values.iteritems():
                         if values != previous_values.get(sensor_id, []):
-                            self.logger('Updating sensor {0} to temp: {1}, humidity: {2}'.format(sensor_id,
+                            self.logger('Updating sensor {0} to temp: {1}, humidity: {2}, brightness: {3}'.format(sensor_id,
                                                                                                  values[0] if values[0] is not None else '-',
-                                                                                                 values[1] if values[1] is not None else '-'))
+                                                                                                 values[1] if values[1] is not None else '-',
+                                                                                                 values[2] if values[2] is not None else '-'))
                         previous_values[sensor_id] = values
                         result = json.loads(self.webinterface.set_virtual_sensor(None, sensor_id, *values))
                         if result['success'] is False:
