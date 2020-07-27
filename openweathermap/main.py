@@ -108,7 +108,7 @@ class OpenWeatherMap(OMPluginBase):
                                     continue
                                 rain = 0
                                 if 'rain' in selected_entry:
-                                    rain = selected_entry['rain'][0]
+                                    rain = selected_entry['rain'][next(iter(selected_entry['rain']))]
                                 sensor_values[sensor_id] = [selected_entry['main']['temp'], selected_entry['main']['humidity'], rain]
                     except Exception as ex:
                         self.logger('Error while fetching forecast temperatures: {0}'.format(ex))
@@ -127,7 +127,7 @@ class OpenWeatherMap(OMPluginBase):
                                 sensor_id = sensor['sensor_id']
                                 rain = 0
                                 if 'rain' in result:
-                                    rain = result['rain'][0]
+                                    rain = result['rain'][next(iter(result['rain']))]
                                 sensor_values[sensor_id] = [result['main']['temp'], result['main']['humidity'], rain]
                     except Exception as ex:
                         self.logger('Error while fetching current temperatures: {0}'.format(ex))
