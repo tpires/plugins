@@ -9,9 +9,6 @@ import simplejson as json
 from plugins.base import om_expose, OMPluginBase, PluginConfigChecker, background_task
 import logging
 
-logger = logging.getLogger(__name__)
-
-
 class TasmotaHTTP(OMPluginBase):
     """
     An Tasmota HTTP plugin
@@ -51,10 +48,9 @@ class TasmotaHTTP(OMPluginBase):
     default_config = {'refresh_interval': 5, 'max_retries': 20}
     tasmota_http_endpoint = 'http://{ip_address}/cm?user={user}&password={password}&cmnd=Power%20{action}'
 
-    def __init__(self, webinterface, connector):
-        super(TasmotaHTTP, self).__init__(webinterface=webinterface,
-                                            connector=connector)
-        logger.info('Starting Tasmota HTTP plugin...')
+    def __init__(self, webinterface, logger):
+        super(TasmotaHTTP, self).__init__(webinterface, logger)
+        self.logger('Starting Tasmota HTTP plugin...')
 
         self._config = self.read_config(TasmotaHTTP.default_config)
         self._config_checker = PluginConfigChecker(TasmotaHTTP.config_description)
@@ -63,7 +59,7 @@ class TasmotaHTTP(OMPluginBase):
 
         self._previous_output_state = {}
 
-        logger.info("Started Tasmota HTTP plugin")
+        self.logger("Started Tasmota HTTP plugin")
 
     def _read_config(self):
         self._refresh_interval = self._config.get('refresh_interval', self.default_config['refresh_interval'])
@@ -81,7 +77,7 @@ class TasmotaHTTP(OMPluginBase):
             device_output_id = device['output_id']
             self._max_retries_arr[device_output_id] = 0
 
-        logger.info('Tasmota HTTP is {0}'.format('enabled' if self._enabled else 'disabled'))
+        self.logger('Tasmota HTTP is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     @background_task
     def run(self):
@@ -98,8 +94,7 @@ class TasmotaHTTP(OMPluginBase):
                             device_output_id = device['output_id']
 
                             if self._max_retries_arr[device_output_id] > self._max_retries:
-                                logger.warning('{0} reached max retries. Going to stop to retries.'.format(device['label']))
-                                continue
+                                break
 
                             for output in result['status']:
                                 output_id = output['id']
@@ -109,10 +104,13 @@ class TasmotaHTTP(OMPluginBase):
                                     continue
                                 previous_values[device['label']] = self.update_tasmota(device, output)
                                 self._max_retries_arr[device_output_id] = 0
-                                    logger.info('Tasmota device {0} is {1}'.format(device['label'], 'on' if output['status'] == 1 else 'off'))
+                                self.logger('Tasmota device {0} is {1}'.format(device['label'], 'on' if output['status'] == 1 else 'off'))
                 except Exception as ex:
                     self._max_retries_arr[device_output_id] += 1
-                        logger.exception('Error: {0}'.format(ex))
+                    self.logger('Error: {0}'.format(ex))
+
+                    if self._max_retries_arr[device_output_id] > self._max_retries:
+                        self.logger('{0} reached max retries. Stopping retries.'.format(device['label']))
 
                 # Wait a given amount of seconds
                 time.sleep(self._refresh_interval)
