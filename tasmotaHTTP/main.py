@@ -24,6 +24,9 @@ class TasmotaHTTP(OMPluginBase):
     config_description = [{'name': 'refresh_interval',
                            'type': 'int',
                            'description': 'Refresh interval (in seconds) to fetch values from outputs and push to tasmota devices'},
+                           {'name': 'max_retries',
+                           'type': 'int',
+                           'description': 'Maximum amount of retries to fetch values from outputs or push to tasmota devices'},
                           {'name': 'tasmota_mapping',
                            'type': 'section',
                            'description': 'Mapping betweet OpenMotics Virtual Sensors and Tasmota devices. See README.',
@@ -45,7 +48,7 @@ class TasmotaHTTP(OMPluginBase):
                                         'type': 'int',
                                         'description':'OpenMotics output id to sync with Tasmota'}]}]
 
-    default_config = {'refresh_interval': 2}
+    default_config = {'refresh_interval': 5, 'max_retries': 20}
     tasmota_http_endpoint = 'http://{ip_address}/cm?user={user}&password={password}&cmnd=Power%20{action}'
 
     def __init__(self, webinterface, connector):
@@ -63,18 +66,27 @@ class TasmotaHTTP(OMPluginBase):
         logger.info("Started Tasmota HTTP plugin")
 
     def _read_config(self):
-        self._refresh_interval = self._config.get('refresh_interval', 5)
+        self._refresh_interval = self._config.get('refresh_interval', self.default_config['refresh_interval'])
+        self._max_retries = self._config.get('max_retries', self.default_config['max_retries'])
+        self._max_retries_arr = {}
 
         tasmota_mapping = self._config.get('tasmota_mapping', [])
         self._tasmota_mapping = tasmota_mapping
         self._headers = {'X-Requested-With': 'OpenMotics plugin: Tasmota HTTP'}
         self._enabled = bool(self._tasmota_mapping)
 
+        for device in self._tasmota_mapping:
+            if not isinstance(device['output_id'], int):
+                continue
+            device_output_id = device['output_id']
+            self._max_retries_arr[device_output_id] = 0
+
         logger.info('Tasmota HTTP is {0}'.format('enabled' if self._enabled else 'disabled'))
 
     @background_task
     def run(self):
         previous_values = {}
+        device_output_id = -1
         while True:
             if self._enabled:
                 try:
@@ -85,6 +97,10 @@ class TasmotaHTTP(OMPluginBase):
                                 continue
                             device_output_id = device['output_id']
 
+                            if self._max_retries_arr[device_output_id] > self._max_retries:
+                                logger.warning('{0} reached max retries. Going to stop to retries.'.format(device['label']))
+                                continue
+
                             for output in result['status']:
                                 output_id = output['id']
                                 if output_id != device_output_id:
@@ -92,9 +108,11 @@ class TasmotaHTTP(OMPluginBase):
                                 if device['label'] in previous_values and previous_values[device['label']] == output['status']:
                                     continue
                                 previous_values[device['label']] = self.update_tasmota(device, output)
-                                logger.info('Tasmota device {0} is {1}'.format(device['label'], 'on' if output['status'] == 1 else 'off'))
+                                self._max_retries_arr[device_output_id] = 0
+                                    logger.info('Tasmota device {0} is {1}'.format(device['label'], 'on' if output['status'] == 1 else 'off'))
                 except Exception as ex:
-                    logger.exception('Failed to get output status: {0}'.format(ex))
+                    self._max_retries_arr[device_output_id] += 1
+                        logger.exception('Error: {0}'.format(ex))
 
                 # Wait a given amount of seconds
                 time.sleep(self._refresh_interval)
@@ -130,7 +148,5 @@ class TasmotaHTTP(OMPluginBase):
         if response.status_code == 200:
             if response.json()['POWER'] == 'ON':
                 return 1
-        else:
-            logger.error('Failed to update Tasmota device {0}: {1}'.format(device['ip_address'], response.status_code))
 
-        return 0
+        raise Exception('Failed to update Tasmota device {0}: {1}'.format(device['ip_address'], response.status_code))
