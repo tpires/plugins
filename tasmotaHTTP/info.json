@@ -1,5 +1,5 @@
 {
-    "version" : "1.0.3",
+    "version" : "1.0.4",
     "description" : "tasmotaHTTP",
     "metric_source"  : "tasmotahttp",
     "metric_type" : "tasmotahttp",

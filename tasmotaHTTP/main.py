@@ -18,7 +18,7 @@ class TasmotaHTTP(OMPluginBase):
     """
 
     name = 'tasmotaHTTP'
-    version = '1.0.3'
+    version = '1.0.4'
     interfaces = [('config', '1.0')]
 
     config_description = [{'name': 'refresh_interval',
@@ -103,7 +103,7 @@ class TasmotaHTTP(OMPluginBase):
                         device_output_id = device['output_id']
 
                         if (self._clear_interval_arr[device_output_id] != 0) and ((self._clear_interval_arr[device_output_id] + (self._clear_interval * 60)) < int(time.time())):
-                            self.logger("Reseting max retries for output {0}".format(device_output_id))
+                            logger.info("Resetting max retries for output {0}".format(device_output_id))
                             self._max_retries_arr[device_output_id] = 0
                             self._clear_interval_arr[device_output_id] = 0
 
@@ -120,14 +120,14 @@ class TasmotaHTTP(OMPluginBase):
                                 previous_values[device['label']] = self.update_tasmota(device, output)
                                 self._max_retries_arr[device_output_id] = 0
                                 self._clear_interval_arr[device_output_id] = 0
-                                self.logger('Tasmota device {0} is {1}'.format(device['label'], 'on' if output['status'] == 1 else 'off'))
+                                logger.info('Tasmota device {0} is {1}'.format(device['label'], 'on' if output['status'] == 1 else 'off'))
                             except Exception as ex:
                                 self._max_retries_arr[device_output_id] += 1
-                                self.logger('Error: {0}'.format(ex))
+                                logger.exception('Error: {0}'.format(ex))
 
                                 if self._max_retries_arr[device_output_id] > self._max_retries:
                                     self._clear_interval_arr[device_output_id] = int(time.time()) # time in seconds
-                                    self.logger('{0} reached max retries. Going idle for {1} minutes.'.format(device['label'], self._clear_interval))
+                                    logger.info('{0} reached max retries. Going idle for {1} minutes.'.format(device['label'], self._clear_interval))
 
                 # Wait a given amount of seconds
                 time.sleep(self._refresh_interval)
