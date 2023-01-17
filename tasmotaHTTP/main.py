@@ -108,6 +108,8 @@ class TasmotaHTTP(OMPluginBase):
                             self._clear_interval_arr[device_output_id] = 0
 
                         if self._max_retries_arr[device_output_id] > self._max_retries:
+                            self._clear_interval_arr[device_output_id] = int(time.time()) # time in seconds
+                            logger.info('{0} reached max retries. Going idle for {1} minutes.'.format(device['label'], self._clear_interval))
                             continue
 
                         for output in result['status']:
