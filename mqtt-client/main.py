@@ -26,7 +26,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.1.0'
+    version = '3.2.0'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
