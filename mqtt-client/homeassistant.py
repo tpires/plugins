@@ -5,7 +5,7 @@ HomeAssistant MQTT Discovery
 
 from enums import OutputType, HardwareType
 from threading import Thread
-import simplejson as json
+import json
 import logging
 
 logger = logging.getLogger(__name__)
