@@ -13,7 +13,6 @@ import pytz
 import json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, shutter_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
-from serial_utils import CommunicationTimedOutException
 import logging
 from enums import HardwareType
 from .homeassistant import HomeAssistant
