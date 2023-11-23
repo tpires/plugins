@@ -950,7 +950,8 @@ class MQTTClient(OMPluginBase):
                 self._shutters,
                 self._power_modules,
                 self._sensors,
-                self._rooms)
+                self._rooms,
+                self._inputs)
             homeassistant.start_discovery()
 
             # subscribe to output command topic if provided
