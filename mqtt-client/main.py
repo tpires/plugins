@@ -948,6 +948,15 @@ class MQTTClient(OMPluginBase):
 
                 self._process_shutter_event(shutter_id, current_shutter_status[shutter_id], force_change=True)
 
+            # load initial input status
+            current_input_status = self._inputs
+            for input_id in current_input_status:
+                event_status = current_input_status[input_id].get('status')
+                if event_status is None:
+                    continue
+
+                self._process_input_event(input_id, event_status, force_change=True)
+
             # load home assistant discovery
             homeassistant = HomeAssistant(
                 client,
