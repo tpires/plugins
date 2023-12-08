@@ -13,7 +13,6 @@ import pytz
 import json
 from threading import Thread
 from plugins.base import om_expose, input_status, output_status, shutter_status, OMPluginBase, PluginConfigChecker, receive_events, om_metric_receive, background_task
-from serial_utils import CommunicationTimedOutException
 import logging
 from enums import HardwareType
 from .homeassistant import HomeAssistant
@@ -27,7 +26,7 @@ class MQTTClient(OMPluginBase):
     """
 
     name = 'MQTTClient'
-    version = '3.1.0'
+    version = '3.2.2'
     interfaces = [('config', '1.0')]
 
     energy_module_config = {
@@ -646,26 +645,33 @@ class MQTTClient(OMPluginBase):
     def input_status(self, data):
         if self._enabled and self._input_enabled:
             input_id = data.get('input_id')
-            status = 'ON' if data.get('status') else 'OFF'
+            status = data.get('status')
             try:
                 if input_id in self._inputs:
-                    name = self._inputs[input_id].get('name')
-                    if self._inputs[input_id].get('status') != self.input_status_map[status]:
-                        self._log('Input {0} ({1}) switched from {2} to {3}'.format(input_id, name,  self._inputs[input_id].get('status'), status))
-                        logger.info('Input {0} ({1}) switched from {2} to {3}'.format(input_id, name,  self._inputs[input_id].get('status'), status))
-                        data = {'id': input_id,
-                                'name': name,
-                                'status': status,
-                                'timestamp': self._timestamp2isoformat()}
-                        thread = Thread(
-                            target=self._send,
-                            args=(self._input_topic.format(id=input_id), data, self._input_qos, self._input_retain)
-                        )
-                        thread.start()
+                    self._process_input_event(input_id, status)
                 else:
                     logger.error('Got event for unknown input {0}'.format(input_id))
             except Exception as ex:
                 logger.exception('Error processing input {0}'.format(input_id))
+
+    def _process_input_event(self, input_id, event_status, force_change=False):
+        current_input_status = self._inputs
+        event_status = 'ON' if event_status else 'OFF'
+        name = current_input_status[input_id].get('name')
+
+        if (current_input_status[input_id].get('status') != self.input_status_map[event_status]) or (force_change is True):
+            current_input_status[input_id]['status'] = self.input_status_map[event_status]
+            self._log('Input {0} ({1}) switched from {2} to {3}'.format(input_id, name, current_input_status[input_id].get('status'), event_status))
+            logger.info('Input {0} ({1}) switched from {2} to {3}'.format(input_id, name, current_input_status[input_id].get('status'), event_status))
+            data = {'id': input_id,
+                    'name': name,
+                    'status': event_status,
+                    'timestamp': self._timestamp2isoformat()}
+            thread = Thread(
+                target=self._send,
+                args=(self._input_topic.format(id=input_id), data, self._input_qos, self._input_retain)
+            )
+            thread.start()
 
     @output_status(version = 2)
     def output_status(self, event_data):
@@ -942,6 +948,15 @@ class MQTTClient(OMPluginBase):
 
                 self._process_shutter_event(shutter_id, current_shutter_status[shutter_id], force_change=True)
 
+            # load initial input status
+            current_input_status = self._inputs
+            for input_id in current_input_status:
+                event_status = current_input_status[input_id].get('status')
+                if event_status is None:
+                    continue
+
+                self._process_input_event(input_id, event_status, force_change=True)
+
             # load home assistant discovery
             homeassistant = HomeAssistant(
                 client,
@@ -950,7 +965,8 @@ class MQTTClient(OMPluginBase):
                 self._shutters,
                 self._power_modules,
                 self._sensors,
-                self._rooms)
+                self._rooms,
+                self._inputs)
             homeassistant.start_discovery()
 
             # subscribe to output command topic if provided

@@ -5,7 +5,7 @@ HomeAssistant MQTT Discovery
 
 from enums import OutputType, HardwareType
 from threading import Thread
-import simplejson as json
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class HomeAssistant():
                        OutputType.SHUTTER_RELAY: 'shutter',
                        OutputType.LIGHT: 'light'}
 
-    def __init__(self, client, config, outputs, shutters, power_modules, sensors, rooms):
+    def __init__(self, client, config, outputs, shutters, power_modules, sensors, rooms, inputs):
         self._config = config
         self._enabled = self._config.get('homeassistant_discovery_enabled')
         self._qos = int(self._config.get('homeassistant_qos'))
@@ -37,6 +37,7 @@ class HomeAssistant():
         self._power_modules = power_modules
         self._sensors = sensors
         self._rooms = rooms
+        self._inputs = inputs
         self._client = client
 
     def start_discovery(self):
@@ -49,6 +50,7 @@ class HomeAssistant():
                 self._energy_discovery()
                 self._power_discovery()
                 self._sensor_discovery()
+                self._input_discovery()
 
                 logger.info('HomeAssistant Discovery finished.')
             except Exception as ex:
@@ -145,6 +147,21 @@ class HomeAssistant():
                         )
                     )
                     thread.start()
+
+    def _input_discovery(self):
+        if self._config.get('input_status_enabled'):
+            for input_id in self._inputs.keys():
+                input = self._inputs[input_id]
+                thread = Thread(
+                    target=self._send,
+                    args=(
+                        '{0}binary_sensor/openmotics/{1}/config'.format(self._config.get('homeassistant_discovery_prefix_topic'), input_id),
+                        self._dump_input_discovery_json(input_id, input),
+                        self._qos,
+                        self._retain
+                    )
+                )
+                thread.start()
 
     def _send_power_discovery(self, module_id, sensor_id, power):
         thread = Thread(
@@ -349,12 +366,15 @@ class HomeAssistant():
             "set_position_topic": self._config.get('shutter_position_command_topic').replace('+', str(shutter_id)),
             "position_topic": self._config.get('shutter_position_topic_format').format(id=shutter_id),
             "command_topic": self._config.get('shutter_command_topic').replace('+', str(shutter_id)),
+            "state_topic": self._config.get('shutter_state_topic_format').format(id=shutter_id),
             "payload_open": "up",
             "payload_close": "down",
             "payload_stop": "stop",
-            "state_opening": "going_up",
-            "state_closed": "down",
-            "state_stopped": "stopped",
+            "state_closed": '"down"',
+            "state_closing": '"going_down"',
+            "state_open": '"up"',
+            "state_opening": '"going_up"',
+            "state_stopped": '"stopped"',
             "position_open": 0,
             "position_closed": 99,
             "device": {
@@ -490,6 +510,28 @@ class HomeAssistant():
             "device_class": device_class,
             "state_class": "measurement"
         }
+
+    def _dump_input_discovery_json(self, input_id, input):
+        room = ''
+
+        if input.get('room_id') in self._rooms:
+            room = self._rooms[input.get('room_id')]['name']
+
+        return {
+            "name": input.get('name'),
+            "unique_id": "openmotics {0} input".format(input.get('name').lower()),
+            "state_topic": self._config.get('input_status_topic_format').format(id=input_id),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "value_template": "{{ value_json.status }}",
+            "device": {
+                "name": "Input {0}".format(input.get('name')),
+                "identifiers": "Input {0}".format(input.get('name')),
+                "manufacturer": "OpenMotics",
+                "model": "Input module",
+                "suggested_area": room
+            },
+    }
 
     def _send(self, topic, data, qos, retain):
         try:
