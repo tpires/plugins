@@ -7,3 +7,14 @@
 
 # Editors
 .idea
+
+# gateway source simlink
+gateway_src
+
+
+**/__pycache__/**
+
+.venv/
+.vscode/
+
+.coverage

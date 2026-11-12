@@ -6,6 +6,7 @@ For more info: https://github.com/openmotics/plugins/blob/master/mqtt-client/REA
 
 import six
 import sys
+import os
 import re
 import time
 from datetime import datetime
@@ -17,6 +18,16 @@ from serial_utils import CommunicationTimedOutException
 import logging
 from enums import HardwareType
 from homeassistant import HomeAssistant
+
+try:
+    this_dir = os.path.realpath(os.path.dirname(__file__))
+    for lib in os.listdir(os.path.join(this_dir, 'lib')):
+        lib_path = os.path.join(this_dir, 'lib', lib)
+        sys.path.insert(0, lib_path)
+
+    import paho.mqtt.client as client
+except Exception as ex:
+    raise ImportError(f"Could not import library: {ex}")
 
 logger = logging.getLogger(__name__)
 
@@ -568,7 +579,7 @@ class MQTTClient(OMPluginBase):
                                 ', '.join(MQTTClient.energy_module_config.keys())))
                             continue
                         else:
-    	                    logger.info('Configuring energy module {0} (version {1}) with {2} inputs'.format(module_id, version, input_count))
+                            logger.info('Configuring energy module {0} (version {1}) with {2} inputs'.format(module_id, version, input_count))
                         for input_id in range(0, input_count):
                             module_config[input_id] = {'name':     module['input{0}'.format(input_id)],
                                                        'sensor':   module['sensor{0}'.format(input_id)],
@@ -607,7 +618,6 @@ class MQTTClient(OMPluginBase):
     def _try_connect(self):
         if self._enabled is True:
             try:
-                import paho.mqtt.client as client
                 self.client = client.Client()
                 if self._username is not None:
                     logger.info("MQTTClient is using username '{0}' and password".format(self._username))
